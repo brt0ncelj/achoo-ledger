@@ -82,6 +82,10 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
   font-family:var(--f-num);font-size:12px;padding:10px}
 .note{font-size:13px;color:var(--muted);margin:6px 0 0}
 #danger{color:var(--warn)}
+.locbar{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px}
+.locbar button{background:none;border-radius:10px;padding:10px 4px;font-weight:600;color:var(--muted);font-size:15px}
+.locbar button.on{background:var(--ink);color:var(--bg)}
+.locchip{font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:auto;white-space:nowrap}
 .syncbox{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px}
 .syncbox .note{margin:0}
 .flabel{font-size:13px;font-weight:600}
@@ -102,6 +106,11 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
 </head>
 <body>
 <div class="wrap">
+  <div class="locbar" role="radiogroup" aria-label="Where she is now" id="locbar">
+    <button role="radio" data-loc="Ljubljana">Ljubljana</button>
+    <button role="radio" data-loc="Izola">Izola</button>
+    <button role="radio" data-loc="Other">Other</button>
+  </div>
   <div class="status" aria-live="polite">
     <div class="stat"><b class="num" id="sToday">0</b><span>Today</span></div>
     <div class="stat"><b class="num" id="sHour">0</b><span>Last 60 min</span></div>
@@ -169,6 +178,10 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
 (function(){
   const installed=(()=>{ try{ return matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches; }catch(e){ return false; } })();
   const KEY='sneezelog.v1';
+  const LKEY='sneezelog.loc';
+  const LOCS=['Ljubljana','Izola','Other'];
+  let loc='Ljubljana';
+  try{ const v=localStorage.getItem(LKEY); if(LOCS.includes(v)) loc=v; }catch(e){}
   let data=[]; // {t: ms, k: 's'|'p'}
   let storageOK=true;
   try{ data=JSON.parse(localStorage.getItem(KEY)||'[]'); if(!Array.isArray(data)) data=[]; }catch(e){ storageOK=false; data=[]; }
@@ -196,7 +209,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
   // ---------- sneeze ----------
   let burst=0, burstTimer=null;
   $('sneezeBtn').onclick=()=>{
-    goFull(); maybeDailyBackup(); const e={t:Date.now(),k:'s'}; addEntry(e);
+    goFull(); maybeDailyBackup(); const e={t:Date.now(),k:'s',l:loc}; addEntry(e);
     try{ navigator.vibrate && navigator.vibrate(25); }catch(_){}
     burst++; clearTimeout(burstTimer); burstTimer=setTimeout(()=>{burst=0;$('burstHint').textContent='Tap once per sneeze';},8000);
     $('burstHint').textContent='This burst: '+burst;
@@ -214,7 +227,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
       return;
     }
     clearTimeout(pillArmed); b.classList.remove('armed'); $('pillLbl').textContent='Antihistamine taken';
-    maybeDailyBackup(); const e={t:Date.now(),k:'p'}; addEntry(e);
+    maybeDailyBackup(); const e={t:Date.now(),k:'p',l:loc}; addEntry(e);
     try{ navigator.vibrate && navigator.vibrate([40,60,40]); }catch(_){}
     toast('Pill logged at '+hm(e.t), ()=>removeEntry(e));
   };
@@ -242,7 +255,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
     const rows=[];
     for(const e of today){
       const last=rows[rows.length-1];
-      if(!editing && e.k==='s' && last && last.k==='s' && last.items[last.items.length-1].t-e.t<=120000){ last.items.push(e); }
+      if(!editing && e.k==='s' && last && last.k==='s' && (last.items[0].l||'')===(e.l||'') && last.items[last.items.length-1].t-e.t<=120000){ last.items.push(e); }
       else rows.push({k:e.k,items:[e]});
     }
     for(const r of rows){
@@ -253,6 +266,8 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
       div.innerHTML='<span class="t num"></span><span class="what"><span class="dot"></span><span></span></span>';
       div.querySelector('.t').textContent=r.items.length>1?hm(first.t):time;
       div.querySelector('.what span:last-child').textContent=what+(r.items.length>1&&hm(first.t)!==hm(lastI.t)?' until '+hm(lastI.t):'');
+      const el0=r.items[0].l;
+      if(el0 && el0!==loc){ const c=document.createElement('span'); c.className='locchip'; c.textContent=el0; div.querySelector('.what').appendChild(c); }
       if(editing){
         const d=document.createElement('button'); d.className='del'; d.textContent='Delete';
         d.onclick=()=>{
@@ -266,6 +281,14 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
   }
 
   // ---------- stats ----------
+  function renderLoc(){
+    document.querySelectorAll('#locbar button').forEach(b=>{ const on=b.dataset.loc===loc; b.setAttribute('aria-checked',on); b.classList.toggle('on',on); });
+  }
+  document.querySelectorAll('#locbar button').forEach(b=>b.onclick=()=>{
+    if(loc===b.dataset.loc) return;
+    loc=b.dataset.loc; try{ localStorage.setItem(LKEY,loc); }catch(e){}
+    render(); toast('Location: '+loc+'. New taps are logged here.');
+  });
   function renderStats(){
     const now=Date.now(), t0=dayStart(now);
     const s=data.filter(e=>e.k==='s');
@@ -296,7 +319,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
     svg.innerHTML=s;
   }
 
-  function render(){ renderStats(); renderList(); renderChart(); }
+  function render(){ renderLoc(); renderStats(); renderList(); renderChart(); }
 
   // ---------- export / import ----------
     // ---------- sync to Google Sheet + daily file ----------
@@ -305,7 +328,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
   try{ Object.assign(sync,JSON.parse(localStorage.getItem(SKEY)||'{}')); }catch(e){}
   const saveSync=()=>{ try{ localStorage.setItem(SKEY,JSON.stringify(sync)); }catch(e){} };
   const idOf=e=>e.k+e.t;
-  const addOp=e=>({op:'add',id:idOf(e),t:e.t,k:e.k,iso:iso(e.t)});
+  const addOp=e=>({op:'add',id:idOf(e),t:e.t,k:e.k,iso:iso(e.t),l:e.l||''});
   let busy=false, inflight=new Set(), flushTimer=null;
   function schedule(ms){ clearTimeout(flushTimer); flushTimer=setTimeout(flush,ms==null?6000:ms); }
   function qAdd(e){ if(!sync.url) return; sync.pending.push(addOp(e)); saveSync(); renderSync(); schedule(); }
@@ -358,7 +381,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
   }
 
   const sorted=()=>data.slice().sort((a,b)=>a.t-b.t);
-  const csv=()=>'timestamp_local,unix_ms,event\n'+sorted().map(e=>iso(e.t)+','+e.t+','+(e.k==='s'?'sneeze':'antihistamine')).join('\n');
+  const csv=()=>'timestamp_local,unix_ms,event,location\n'+sorted().map(e=>iso(e.t)+','+e.t+','+(e.k==='s'?'sneeze':'antihistamine')+','+(e.l||'')).join('\n');
   function copy(text,label){
     const show=()=>{ $('io').hidden=false; $('ioText').value=text; $('ioText').select(); $('ioAction').hidden=true; };
     if(navigator.clipboard&&navigator.clipboard.writeText){
@@ -380,7 +403,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
       const arr=JSON.parse($('ioText').value);
       if(!Array.isArray(arr)) throw 0;
       const seen=new Set(data.map(e=>e.t+e.k)); let n=0;
-      for(const e of arr){ if(e&&typeof e.t==='number'&&(e.k==='s'||e.k==='p')&&!seen.has(e.t+e.k)){ const ne={t:e.t,k:e.k}; data.push(ne); qAdd(ne); seen.add(e.t+e.k); n++; } }
+      for(const e of arr){ if(e&&typeof e.t==='number'&&(e.k==='s'||e.k==='p')&&!seen.has(e.t+e.k)){ const ne={t:e.t,k:e.k}; if(typeof e.l==='string'&&e.l) ne.l=e.l; data.push(ne); qAdd(ne); seen.add(e.t+e.k); n++; } }
       save(); render(); $('io').hidden=true; toast('Restored '+n+' new entries');
     }catch(e){ toast('That text is not a valid backup. Paste the full JSON from “Backup”.'); }
   };
