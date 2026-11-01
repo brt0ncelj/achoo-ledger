@@ -3,131 +3,184 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 <title>Achoo Ledger</title>
 <meta name="description" content="Tap-to-log sneeze tracker with antihistamine markers. Works offline, syncs to Google Sheets.">
-<meta name="claude:viewport-fit-sides" content="cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#2f7d63">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f3f5f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111715" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
-/* Layout: one-thumb tool. Status strip, giant tap target, pill button, then today's timeline, 14-day chart, data tools. */
+/* Layout: compact header (receipt mark + wordmark + sync dot), stats row, big tap card with location slider in its base, slim pill bar, today list, 14-day chart, collapsed Data & backup drawer. */
 :root{
   --bg:#f3f5f4; --surface:#ffffff; --line:#dfe5e2; --ink:#18221e; --muted:#5d6b65;
-  --sneeze:#2f7d63; --sneeze-ink:#ffffff; --pill:#c4476a; --pill-soft:#f6dde4; --warn:#b3261e;
+  --sneeze:#2f7d63; --sneeze-deep:#25654f; --sneeze-ink:#ffffff; --pill:#c4476a; --pill-soft:#f6dde4; --warn:#b3261e; --paper:#ffffff;
   --f-ui: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --f-num: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --f-num: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#111715; --surface:#1a2320; --line:#2b3733; --ink:#e7eeeb; --muted:#93a39c;
-  --sneeze:#3f9e7e; --sneeze-ink:#06120d; --pill:#e0708e; --pill-soft:#3a2129; --warn:#f2867d; color-scheme:dark}}
+  --sneeze:#3f9e7e; --sneeze-deep:#2f7d63; --sneeze-ink:#06120d; --pill:#e0708e; --pill-soft:#3a2129; --warn:#f2867d; --paper:#f1f4f2; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#111715; --surface:#1a2320; --line:#2b3733; --ink:#e7eeeb; --muted:#93a39c;
-  --sneeze:#3f9e7e; --sneeze-ink:#06120d; --pill:#e0708e; --pill-soft:#3a2129; --warn:#f2867d; color-scheme:dark}
+  --sneeze:#3f9e7e; --sneeze-deep:#2f7d63; --sneeze-ink:#06120d; --pill:#e0708e; --pill-soft:#3a2129; --warn:#f2867d; --paper:#f1f4f2; color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{background:var(--bg)}
-body{color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.45;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 40px;
+body{color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.45;margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px 40px;
   -webkit-tap-highlight-color:transparent}
-.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.wrap{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 .num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
-.status{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;touch-action:manipulation}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+
+/* header */
+header{display:flex;align-items:center;gap:10px}
+.mark{width:30px;height:30px;flex:none}
+.word{font-family:var(--f-num);font-weight:700;font-size:16px;letter-spacing:.12em;text-transform:uppercase}
+.word span{color:var(--pill)}
+.syncpill{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.sd{width:8px;height:8px;border-radius:50%;background:var(--sneeze);flex:none}
+[data-state="wait"] .sd{background:var(--muted)}
+[data-state="err"] .sd{background:var(--warn)}
+[data-state="off"] .sd{background:transparent;border:1.5px solid var(--muted)}
+
+/* stats */
+.status{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .stat{display:flex;flex-direction:column;gap:2px}
 .stat b{font-size:28px;font-weight:600;line-height:1.1}
 .stat span{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.tap{display:grid;grid-template-columns:1fr;gap:10px}
-button{font:inherit;color:inherit;cursor:pointer;border:0;touch-action:manipulation}
-button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-#sneezeBtn{background:var(--sneeze);color:var(--sneeze-ink);border-radius:28px;height:clamp(200px,38vh,320px);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;user-select:none;transition:transform .08s}
-#sneezeBtn:active{transform:scale(.98)}
-#sneezeBtn .big{font-size:56px;font-weight:700;line-height:1}
+.stat.pill b{color:var(--pill)}
+
+/* tap card */
+.card{background:var(--sneeze);border-radius:28px;overflow:hidden;display:flex;flex-direction:column}
+#sneezeBtn{color:var(--sneeze-ink);height:clamp(190px,34vh,300px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;user-select:none;position:relative}
+#sneezeBtn:active{background:rgba(0,0,0,.06)}
+#sneezeBtn .big{font-size:60px;font-weight:700;line-height:1;transition:transform .12s}
+#sneezeBtn.bump .big{transform:scale(1.12)}
 #sneezeBtn .lbl{font-size:18px;font-weight:600}
 #sneezeBtn .hint{font-size:13px;opacity:.8}
-#pillBtn{background:var(--pill-soft);color:var(--pill);border:2px solid var(--pill);border-radius:18px;height:64px;
-  font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px}
+.burst{position:absolute;top:14px;right:16px;font-family:var(--f-num);font-size:13px;font-weight:700;background:rgba(255,255,255,.18);border-radius:999px;padding:3px 10px;opacity:0;transition:opacity .2s}
+.burst.on{opacity:1}
+.burst b{font-family:var(--f-ui);margin-left:6px}
+.burst.hype{background:rgba(255,255,255,.95);color:#18221e}
+.burst.hype b{color:#c4476a}
+.burst.max{animation:wob .5s ease 2}
+@keyframes wob{25%{transform:rotate(-4deg) scale(1.08)}75%{transform:rotate(4deg) scale(1.08)}}
+
+.loc{position:relative;display:grid;grid-template-columns:repeat(3,1fr);margin:0 10px 10px;background:var(--sneeze-deep);border-radius:16px;padding:4px}
+.loc .thumb{position:absolute;top:4px;bottom:4px;left:4px;width:calc((100% - 8px)/3);background:var(--paper);border-radius:12px;transition:transform .22s cubic-bezier(.3,.7,.3,1)}
+.loc button{position:relative;z-index:1;padding:10px 4px;font-weight:600;font-size:14px;color:var(--sneeze-ink);opacity:.85;display:flex;align-items:center;justify-content:center;gap:6px}
+.loc button.on{color:#18221e;opacity:1}
+.loc svg{width:12px;height:12px}
+
+/* pill bar */
+#pillBtn{display:flex;align-items:center;gap:12px;height:52px;border-radius:16px;border:1.5px solid var(--pill);color:var(--pill);padding:0 16px;font-weight:700;background:var(--surface)}
+#pillBtn .meta{margin-left:auto;font-weight:500;font-size:13px;color:var(--muted)}
 #pillBtn.armed{background:var(--pill);color:var(--surface)}
-.capsule{width:26px;height:12px;border-radius:6px;background:linear-gradient(90deg,var(--pill) 50%,var(--surface) 50%);border:1.5px solid var(--pill)}
+#pillBtn.armed .meta{color:var(--surface)}
+.capsule{width:24px;height:11px;border-radius:6px;background:linear-gradient(90deg,var(--pill) 50%,var(--surface) 50%);border:1.5px solid var(--pill);flex:none}
 #pillBtn.armed .capsule{border-color:var(--surface)}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));
-  background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 10px 10px 16px;display:flex;align-items:center;gap:14px;
-  font-size:14px;max-width:calc(100% - 32px);z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.25)}
-.toast button{background:transparent;color:var(--bg);font-weight:700;padding:8px 10px;border-radius:8px;text-decoration:underline}
-section h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:700;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-section h2 button{text-transform:none;letter-spacing:0;font-size:13px;background:none;color:var(--sneeze);font-weight:600;padding:4px 0}
+
+/* sections */
+section h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:700;display:flex;justify-content:space-between;align-items:baseline}
+section h2 button{text-transform:none;letter-spacing:0;font-size:13px;color:var(--sneeze);font-weight:600;padding:4px 0}
 .list{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line);min-height:48px}
 .row:first-child{border-top:0}
-.row .t{width:64px;flex:none}
+.row .t{width:48px;flex:none}
 .row .what{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--sneeze);flex:none}
 .row.p .dot{background:var(--pill);border-radius:3px;width:16px;height:8px}
 .row.p .what{color:var(--pill);font-weight:600}
-.del{background:none;color:var(--muted);padding:8px 10px;border-radius:8px;font-size:13px}
+.chip{font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:auto;white-space:nowrap}
+.del{color:var(--muted);padding:8px 10px;border-radius:8px;font-size:13px}
 .del.armed{background:var(--warn);color:var(--surface);font-weight:700}
 .empty{padding:16px 14px;color:var(--muted)}
-.editing .del{display:inline-block}
-.del{display:none}
+.more{display:block;width:100%;padding:10px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+
 .chart{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 10px 8px}
 .chart svg{display:block;width:100%;height:auto}
 .chart text{fill:var(--muted);font-family:var(--f-num);font-size:10px}
 .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);padding:6px 6px 0}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* drawer */
+.drawer{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.drawer>button{width:100%;display:flex;align-items:center;gap:10px;padding:14px;font-weight:600;text-align:left}
+.drawer>button .sum{margin-left:auto;font-weight:500;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;min-width:0}
+.chev{width:12px;height:12px;transition:transform .2s;flex:none}
+.drawer.open .chev{transform:rotate(180deg)}
+.dbody{border-top:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:18px}
+.grp{display:flex;flex-direction:column;gap:8px}
+.grp h3{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.act{display:flex;align-items:center;gap:12px;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.act .ic{width:32px;height:32px;flex:none;border-radius:9px;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--sneeze)}
+.tx{display:flex;flex-direction:column;min-width:0}
+.tx b{font-weight:600}
+.tx small{font-size:12.5px;color:var(--muted);line-height:1.35}
 .tools{display:flex;flex-wrap:wrap;gap:8px}
-.tools button{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-weight:600}
-textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink);
-  font-family:var(--f-num);font-size:12px;padding:10px}
-.note{font-size:13px;color:var(--muted);margin:6px 0 0}
-#danger{color:var(--warn)}
-.locbar{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;gap:4px}
-.locbar button{background:none;border-radius:10px;padding:10px 4px;font-weight:600;color:var(--muted);font-size:15px}
-.locbar button.on{background:var(--ink);color:var(--bg)}
-.locchip{font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px;margin-left:auto;white-space:nowrap}
-.syncbox{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px}
-.syncbox .note{margin:0}
-.flabel{font-size:13px;font-weight:600}
+.tools button{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-weight:600}
+.io{display:flex;flex-direction:column;gap:8px}
+.io textarea{width:100%;min-height:90px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:var(--f-num);font-size:12px;padding:10px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:4px 2px}
+.check input{width:20px;height:20px;margin-top:2px;flex:none;accent-color:var(--sneeze)}
 .urlrow{display:flex;gap:8px}
 .urlrow input{flex:1;min-width:0;font:inherit;font-size:14px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
 .urlrow button{background:var(--sneeze);color:var(--sneeze-ink);border-radius:12px;padding:0 16px;font-weight:700}
-.sstatus{margin:0;font-size:13px;padding-left:16px;position:relative}
-.sstatus::before{content:"";position:absolute;left:0;top:5px;width:9px;height:9px;border-radius:50%;background:var(--sneeze)}
-.sstatus[data-state="wait"]::before{background:var(--muted)}
-.sstatus[data-state="err"]::before{background:var(--warn)}
-.sstatus[data-state="err"]{color:var(--warn)}
-.check{display:flex;gap:10px;align-items:center;font-size:14px}
-.check input{width:20px;height:20px;accent-color:var(--sneeze)}
-.syncbox .tools button{background:var(--bg)}
-@media (prefers-reduced-motion:reduce){#sneezeBtn{transition:none}}
-</style>
+.note{font-size:13px;color:var(--muted);margin:0}
+.sstat{margin:0;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.sstat[data-state="err"]{color:var(--warn)}
 
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 10px 10px 16px;display:flex;align-items:center;gap:14px;font-size:14px;max-width:calc(100% - 32px);z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast button{color:var(--bg);font-weight:700;padding:8px 10px;text-decoration:underline}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
 </head>
 <body>
 <div class="wrap">
-  <div class="locbar" role="radiogroup" aria-label="Where she is now" id="locbar">
-    <button role="radio" data-loc="Ljubljana">Ljubljana</button>
-    <button role="radio" data-loc="Izola">Izola</button>
-    <button role="radio" data-loc="Other">Other</button>
-  </div>
+  <header>
+    <svg class="mark" viewBox="0 0 512 512" aria-hidden="true">
+      <rect width="512" height="512" rx="112" fill="var(--sneeze)"/>
+      <g transform="rotate(-6 256 256)">
+        <path d="M106 124 l18.75 -14 l18.75 14 l18.75 -14 l18.75 14 l18.75 -14 l18.75 14 l18.75 -14 l18.75 14 l18.75 -14 l18.75 14 l18.75 -14 l18.75 14 l18.75 -14 l18.75 14 l18.75 -14 l18.75 14 V388 l-18.75 14 l-18.75 -14 l-18.75 14 l-18.75 -14 l-18.75 14 l-18.75 -14 l-18.75 14 l-18.75 -14 l-18.75 14 l-18.75 -14 l-18.75 14 l-18.75 -14 l-18.75 14 l-18.75 -14 l-18.75 14 l-18.75 -14 Z" fill="#fff"/>
+        <rect x="190" y="180" width="132" height="44" rx="10" fill="#c4476a"/>
+        <rect x="160" y="262" width="192" height="56" rx="12" fill="#18221e"/>
+      </g>
+    </svg>
+    <div class="word">Achoo<span>·</span>Ledger</div>
+    <div class="syncpill" id="hdrSync" data-state="off"><i class="sd"></i><span id="hdrSyncTx">Local only</span></div>
+  </header>
+
   <div class="status" aria-live="polite">
     <div class="stat"><b class="num" id="sToday">0</b><span>Today</span></div>
     <div class="stat"><b class="num" id="sHour">0</b><span>Last 60 min</span></div>
-    <div class="stat"><b class="num" id="sPill">–</b><span>Since pill</span></div>
+    <div class="stat pill"><b class="num" id="sPill">–</b><span>Since pill</span></div>
   </div>
 
-  <div class="tap">
+  <div class="card">
     <button id="sneezeBtn" aria-label="Log one sneeze">
+      <span class="burst" id="burst" aria-live="polite"></span>
       <span class="big">+1</span>
       <span class="lbl">Sneeze</span>
-      <span class="hint" id="burstHint">Tap once per sneeze</span>
+      <span class="hint">Tap once per sneeze</span>
     </button>
-    <button id="pillBtn"><span class="capsule" aria-hidden="true"></span><span id="pillLbl">Antihistamine taken</span></button>
+    <div class="loc" role="radiogroup" aria-label="Where she is now" id="loc">
+      <span class="thumb" id="thumb"></span>
+      <button role="radio" data-loc="Ljubljana">Ljubljana</button>
+      <button role="radio" data-loc="Izola">Izola</button>
+      <button role="radio" data-loc="Other">Other</button>
+    </div>
   </div>
 
+  <button id="pillBtn"><span class="capsule" aria-hidden="true"></span><span id="pillLbl">Took antihistamine</span><span class="meta" id="pillMeta"></span></button>
+
   <section>
-    <h2><span id="dayLabel">Today</span><button id="editBtn">Edit</button></h2>
+    <h2><span>Today</span><button id="editBtn">Edit</button></h2>
     <div class="list" id="list"></div>
   </section>
 
@@ -139,57 +192,60 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
     </div>
   </section>
 
-  <section>
-    <h2><span>Data</span></h2>
-    <div class="tools">
-      <button id="csvBtn">Copy CSV</button>
-      <button id="dlBtn">Download CSV</button>
-      <button id="jsonBtn">Backup (JSON)</button>
-      <button id="importBtn">Restore</button>
-      <button id="fsBtn">Full screen</button>
-    </div>
-    <div id="io" hidden style="margin-top:10px">
-      <textarea id="ioText" spellcheck="false"></textarea>
-      <div class="tools" style="margin-top:8px">
-        <button id="ioAction">Restore from text</button>
-        <button id="ioClose">Close</button>
+  <div class="drawer" id="drawer">
+    <button id="drawerBtn" aria-expanded="false" aria-controls="dbody">
+      Data &amp; backup
+      <span class="sum" id="drawerSum" data-state="off"><i class="sd"></i><span id="drawerSumTx">Local only</span></span>
+      <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    </button>
+    <div class="dbody" id="dbody" hidden>
+      <div class="grp">
+        <h3>Export for analysis</h3>
+        <button class="act" id="csvBtn"><span class="ic">⧉</span><span class="tx"><b>Copy CSV to clipboard</b><small>Paste into Excel, Sheets or a message</small></span></button>
+        <button class="act" id="dlBtn"><span class="ic">↓</span><span class="tx"><b>Save CSV file</b><small>Goes to your Downloads folder</small></span></button>
       </div>
+      <div class="grp">
+        <h3>Backup &amp; restore</h3>
+        <button class="act" id="jsonBtn"><span class="ic">⧉</span><span class="tx"><b>Copy backup to clipboard</b><small>Paste it into a note or email to yourself</small></span></button>
+        <button class="act" id="importBtn"><span class="ic">↺</span><span class="tx"><b>Restore from backup</b><small>Paste a copied backup. Nothing is overwritten, duplicates are skipped.</small></span></button>
+        <div class="io" id="io" hidden>
+          <textarea id="ioText" spellcheck="false"></textarea>
+          <div class="tools"><button id="ioAction">Restore</button><button id="ioClose">Close</button></div>
+        </div>
+        <label class="check" id="autoRow"><input type="checkbox" id="autoBackup"><span class="tx"><b>Daily backup file</b><small id="autoNote">Your first tap each day also saves a full CSV to Downloads</small></span></label>
+        <p class="note" id="storeNote" hidden></p>
+      </div>
+      <div class="grp" id="syncBox">
+        <h3>Google Sheet sync</h3>
+        <p class="note">Every tap is sent to your Sheet a few seconds later. Offline taps wait and send when you are back online.</p>
+        <div class="urlrow"><input id="syncUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" aria-label="Google Sheet web app URL"><button id="syncSave">Save</button></div>
+        <p class="sstat" id="syncStatus" data-state="off"><i class="sd"></i><span id="syncStatusTx"></span></p>
+        <div class="tools"><button id="syncNow">Sync now</button><button id="syncAll">Resend everything</button></div>
+      </div>
+      <p class="note" id="frameNote" hidden>Sheet sync and file saving work in the installed app, not in this preview.</p>
     </div>
-    <p class="note" id="storeNote">Saved on this phone. Turn on sync below so there is always a copy elsewhere.</p>
-  </section>
-
-  <section>
-    <h2><span>Backup &amp; sync</span></h2>
-    <p class="note" id="frameNote" hidden>Sheet sync and the daily file work in the offline copy of this page on the phone, not here.</p>
-    <div id="syncBox" class="syncbox">
-      <label for="syncUrl" class="flabel">Google Sheet web app URL</label>
-      <div class="urlrow"><input id="syncUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec"><button id="syncSave">Save</button></div>
-      <p class="sstatus" id="syncStatus" data-state="ok"></p>
-      <div class="tools"><button id="syncNow">Sync now</button><button id="syncAll">Resend everything</button></div>
-      <label class="check"><input type="checkbox" id="autoBackup"> Save a CSV to Downloads on the first tap each day</label>
-      <p class="note" id="lastFile"></p>
-    </div>
-  </section>
+  </div>
 </div>
 
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="undoBtn">Undo</button></div>
 
 <script>
 (function(){
+  const $=id=>document.getElementById(id);
   const installed=(()=>{ try{ return matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches; }catch(e){ return false; } })();
-  const KEY='sneezelog.v1';
-  const LKEY='sneezelog.loc';
+  let inFrame=true; try{ inFrame=window.self!==window.top; }catch(e){}
+
+  // ---------- storage (keys unchanged so existing data carries over) ----------
+  const KEY='sneezelog.v1', LKEY='sneezelog.loc', SKEY='sneezelog.sync.v1';
   const LOCS=['Ljubljana','Izola','Other'];
   let loc='Ljubljana';
   try{ const v=localStorage.getItem(LKEY); if(LOCS.includes(v)) loc=v; }catch(e){}
-  let data=[]; // {t: ms, k: 's'|'p'}
-  let storageOK=true;
+  let data=[], storageOK=true;
   try{ data=JSON.parse(localStorage.getItem(KEY)||'[]'); if(!Array.isArray(data)) data=[]; }catch(e){ storageOK=false; data=[]; }
   try{ navigator.storage && navigator.storage.persist && navigator.storage.persist(); }catch(e){}
-
-  const $=id=>document.getElementById(id);
-  const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(data)); }catch(e){ storageOK=false; $('storeNote').textContent='Storage is blocked here. Entries will be lost when you close the page. Export before leaving.'; } };
-  if(!storageOK) $('storeNote').textContent='Storage is blocked here. Entries will be lost when you close the page.';
+  function storeWarn(){ $('storeNote').hidden=false; $('storeNote').textContent='Storage is blocked here. Entries will be lost when you close the app. Copy a backup before leaving.'; }
+  const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(data)); }catch(e){ storageOK=false; storeWarn(); } };
+  if(!storageOK) storeWarn();
 
   const pad=n=>String(n).padStart(2,'0');
   const hm=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes());};
@@ -206,68 +262,87 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
   }
   $('undoBtn').onclick=()=>{ if(undoFn) undoFn(); $('toast').hidden=true; undoFn=null; };
 
-  // ---------- sneeze ----------
+  function goFull(){
+    if(installed||inFrame) return;
+    try{ const d=document.documentElement; if(!document.fullscreenElement && d.requestFullscreen) d.requestFullscreen({navigationUI:'hide'}).catch(()=>{}); }catch(e){}
+  }
+
+  // ---------- location ----------
+  const PIN='<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 11s4-3.6 4-6.4A4 4 0 0 0 2 4.6C2 7.4 6 11 6 11Z" fill="currentColor"/></svg>';
+  function renderLoc(){
+    const btns=[...document.querySelectorAll('#loc button')], i=Math.max(0,LOCS.indexOf(loc));
+    $('thumb').style.transform='translateX('+(i*100)+'%)';
+    btns.forEach((b,j)=>{ const on=j===i; b.classList.toggle('on',on); b.setAttribute('aria-checked',on); b.innerHTML=(on?PIN:'')+b.dataset.loc; });
+  }
+  document.querySelectorAll('#loc button').forEach(b=>b.onclick=()=>{
+    if(loc===b.dataset.loc) return;
+    loc=b.dataset.loc; try{ localStorage.setItem(LKEY,loc); }catch(e){}
+    render(); toast('Location: '+loc+'. New taps are logged here.');
+  });
+
+  // ---------- sneeze + burst cheers ----------
+  const CHEERS={2:'Double!',3:'Good job!',4:'Hay there!',5:'Snot bad!',6:'Achoo-ievement!',7:'Bless this mess!',8:'Gesundheit!',9:'ONE MORE!',10:'Perfect ten!'};
+  const WIGGLE=[5,9,10];
   let burst=0, burstTimer=null;
+  function showBurst(){
+    const el=$('burst');
+    if(!burst){ el.classList.remove('on','hype','max'); return; }
+    const msg=CHEERS[burst]||(burst>10?'Record breaker!':'');
+    el.textContent='×'+burst; if(msg){ const b=document.createElement('b'); b.textContent=msg; el.appendChild(b); }
+    el.classList.add('on'); el.classList.toggle('hype',burst>=3);
+    el.classList.remove('max'); if(WIGGLE.includes(burst)){ void el.offsetWidth; el.classList.add('max'); }
+  }
   $('sneezeBtn').onclick=()=>{
-    goFull(); maybeDailyBackup(); const e={t:Date.now(),k:'s',l:loc}; addEntry(e);
+    goFull(); maybeDailyBackup();
+    const e={t:Date.now(),k:'s',l:loc}; addEntry(e);
     try{ navigator.vibrate && navigator.vibrate(25); }catch(_){}
-    burst++; clearTimeout(burstTimer); burstTimer=setTimeout(()=>{burst=0;$('burstHint').textContent='Tap once per sneeze';},8000);
-    $('burstHint').textContent='This burst: '+burst;
-    render();
-    toast('Sneeze logged at '+hm(e.t)+(burst>1?' · '+burst+' in a row':''), ()=>{ removeEntry(e); burst=Math.max(0,burst-1); $('burstHint').textContent=burst?'This burst: '+burst:'Tap once per sneeze'; });
+    burst++; clearTimeout(burstTimer); burstTimer=setTimeout(()=>{burst=0;showBurst();},8000); showBurst();
+    const b=$('sneezeBtn'); b.classList.add('bump'); setTimeout(()=>b.classList.remove('bump'),120);
+    toast('Sneeze logged at '+hm(e.t)+' · '+loc, ()=>{ removeEntry(e); burst=Math.max(0,burst-1); showBurst(); });
   };
 
   // ---------- pill (two taps to avoid accidental log) ----------
   let pillArmed=null;
+  const PILL_LBL='Took antihistamine';
   $('pillBtn').onclick=()=>{
     goFull(); const b=$('pillBtn');
     if(!b.classList.contains('armed')){
       b.classList.add('armed'); $('pillLbl').textContent='Tap again to confirm';
-      clearTimeout(pillArmed); pillArmed=setTimeout(()=>{b.classList.remove('armed');$('pillLbl').textContent='Antihistamine taken';},3000);
+      clearTimeout(pillArmed); pillArmed=setTimeout(()=>{b.classList.remove('armed');$('pillLbl').textContent=PILL_LBL;},3000);
       return;
     }
-    clearTimeout(pillArmed); b.classList.remove('armed'); $('pillLbl').textContent='Antihistamine taken';
+    clearTimeout(pillArmed); b.classList.remove('armed'); $('pillLbl').textContent=PILL_LBL;
     maybeDailyBackup(); const e={t:Date.now(),k:'p',l:loc}; addEntry(e);
     try{ navigator.vibrate && navigator.vibrate([40,60,40]); }catch(_){}
-    toast('Pill logged at '+hm(e.t), ()=>removeEntry(e));
+    toast('Pill logged at '+hm(e.t)+' · '+loc, ()=>removeEntry(e));
   };
 
   function addEntry(e){ data.push(e); save(); qAdd(e); render(); }
-  function goFull(){
-    try{ const d=document.documentElement;
-      if(installed) return;
-      if(!document.fullscreenElement && d.requestFullscreen && !inFrame) d.requestFullscreen({navigationUI:'hide'}).catch(()=>{}); }catch(e){}
-  }
-  $('fsBtn').onclick=()=>{ try{ document.fullscreenElement?document.exitFullscreen():goFull(); }catch(e){} };
-  document.addEventListener('fullscreenchange',()=>{ $('fsBtn').textContent=document.fullscreenElement?'Exit full screen':'Full screen'; });
   function removeEntry(e){ const i=data.indexOf(e); if(i>-1){data.splice(i,1);save();qDel(e);render();} }
 
-  // ---------- list with edit mode ----------
-  let editing=false;
+  // ---------- today list ----------
+  let editing=false, showAll=false;
   $('editBtn').onclick=()=>{ editing=!editing; $('editBtn').textContent=editing?'Done':'Edit'; render(); };
-
   function renderList(){
     const t0=dayStart(Date.now());
     const today=data.filter(e=>e.t>=t0).sort((a,b)=>b.t-a.t);
-    const list=$('list'); list.innerHTML=''; list.classList.toggle('editing',editing);
+    const list=$('list'); list.innerHTML='';
     if(!today.length){ list.innerHTML='<div class="empty">Nothing logged today. Tap the green button for each sneeze.</div>'; return; }
-    // collapse consecutive sneezes within 2 min into one row for reading; edit mode shows each one
     const rows=[];
     for(const e of today){
       const last=rows[rows.length-1];
-      if(!editing && e.k==='s' && last && last.k==='s' && (last.items[0].l||'')===(e.l||'') && last.items[last.items.length-1].t-e.t<=120000){ last.items.push(e); }
+      if(!editing && e.k==='s' && last && last.k==='s' && (last.items[0].l||'')===(e.l||'') && last.items[last.items.length-1].t-e.t<=120000) last.items.push(e);
       else rows.push({k:e.k,items:[e]});
     }
-    for(const r of rows){
-      const first=r.items[r.items.length-1], lastI=r.items[0];
+    const shown=(showAll||editing)?rows:rows.slice(0,5);
+    for(const r of shown){
+      const first=r.items[r.items.length-1], n=r.items.length;
       const div=document.createElement('div'); div.className='row '+r.k;
-      const time=r.items.length>1&&hm(first.t)!==hm(lastI.t)?hm(first.t)+'–'+hm(lastI.t).slice(3):hm(lastI.t);
-      const what=r.k==='p'?'Antihistamine':(r.items.length>1?r.items.length+' sneezes':'1 sneeze');
       div.innerHTML='<span class="t num"></span><span class="what"><span class="dot"></span><span></span></span>';
-      div.querySelector('.t').textContent=r.items.length>1?hm(first.t):time;
-      div.querySelector('.what span:last-child').textContent=what+(r.items.length>1&&hm(first.t)!==hm(lastI.t)?' until '+hm(lastI.t):'');
-      const el0=r.items[0].l;
-      if(el0 && el0!==loc){ const c=document.createElement('span'); c.className='locchip'; c.textContent=el0; div.querySelector('.what').appendChild(c); }
+      div.querySelector('.t').textContent=hm(first.t);
+      div.querySelector('.what span:last-child').textContent=r.k==='p'?'Antihistamine':(n>1?n+' sneezes':'1 sneeze');
+      const l0=r.items[0].l;
+      if(l0 && l0!==loc){ const c=document.createElement('span'); c.className='chip'; c.textContent=l0; div.querySelector('.what').appendChild(c); }
       if(editing){
         const d=document.createElement('button'); d.className='del'; d.textContent='Delete';
         d.onclick=()=>{
@@ -278,24 +353,21 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
       }
       list.appendChild(div);
     }
+    if(!editing && rows.length>5){
+      const m=document.createElement('button'); m.className='more';
+      m.textContent=showAll?'Show less':'Show all '+rows.length+' entries';
+      m.onclick=()=>{showAll=!showAll;renderList();}; list.appendChild(m);
+    }
   }
 
   // ---------- stats ----------
-  function renderLoc(){
-    document.querySelectorAll('#locbar button').forEach(b=>{ const on=b.dataset.loc===loc; b.setAttribute('aria-checked',on); b.classList.toggle('on',on); });
-  }
-  document.querySelectorAll('#locbar button').forEach(b=>b.onclick=()=>{
-    if(loc===b.dataset.loc) return;
-    loc=b.dataset.loc; try{ localStorage.setItem(LKEY,loc); }catch(e){}
-    render(); toast('Location: '+loc+'. New taps are logged here.');
-  });
   function renderStats(){
-    const now=Date.now(), t0=dayStart(now);
-    const s=data.filter(e=>e.k==='s');
+    const now=Date.now(), t0=dayStart(now), s=data.filter(e=>e.k==='s');
     $('sToday').textContent=s.filter(e=>e.t>=t0).length;
     $('sHour').textContent=s.filter(e=>e.t>=now-3600000).length;
-    const pills=data.filter(e=>e.k==='p').map(e=>e.t);
-    $('sPill').textContent=pills.length?ago(now-Math.max(...pills)):'–';
+    const pills=data.filter(e=>e.k==='p').map(e=>e.t), lp=pills.length?Math.max(...pills):null;
+    $('sPill').textContent=lp?ago(now-lp):'–';
+    $('pillMeta').textContent=lp?(dayStart(lp)===t0?'last '+hm(lp):'last '+ago(now-lp)+' ago'):'';
   }
 
   // ---------- chart ----------
@@ -306,24 +378,24 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
     starts.forEach((st,i)=>{ const en=i<days-1?starts[i+1]:st+86400000;
       counts.push(data.filter(e=>e.k==='s'&&e.t>=st&&e.t<en).length);
       pill.push(data.some(e=>e.k==='p'&&e.t>=st&&e.t<en)); });
-    const max=Math.max(4,...counts), step=Math.ceil(max/4), top=step*4;
-    const pw=W-L-R, ph=H-T-B, bw=pw/days;
+    const max=Math.max(4,...counts), step=Math.ceil(max/4), top=step*4, pw=W-L-R, ph=H-T-B, bw=pw/days;
     let s='';
     for(let g=0;g<=4;g++){ const y=T+ph-ph*(g/4); s+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="${L-4}" y="${y+3}" text-anchor="end">${g*step}</text>`; }
     counts.forEach((c,i)=>{
-      const h=ph*c/top, x=L+i*bw+bw*0.18, w=bw*0.64, y=T+ph-h;
-      s+=`<rect x="${x}" y="${y}" width="${w}" height="${Math.max(h,0)}" rx="2" fill="var(--sneeze)"/>`;
+      const h=ph*c/top, x=L+i*bw+bw*0.18, w=bw*0.64, y=T+ph-h, last=i===days-1;
+      s+=`<rect x="${x}" y="${y}" width="${w}" height="${Math.max(h,0)}" rx="2" fill="var(--sneeze)" opacity="${last?1:.7}"/>`;
       if(pill[i]) s+=`<rect x="${x+w/2-5}" y="${T+ph+3}" width="10" height="5" rx="2.5" fill="var(--pill)"/>`;
-      const d=new Date(starts[i]); if(i%2===days%2||i===days-1) s+=`<text x="${x+w/2}" y="${H-2}" text-anchor="middle">${d.getDate()}</text>`;
+      if(i%2===1||last) s+=`<text x="${x+w/2}" y="${H-2}" text-anchor="middle"${last?' font-weight="700"':''}>${last?'today':new Date(starts[i]).getDate()}</text>`;
     });
     svg.innerHTML=s;
   }
 
   function render(){ renderLoc(); renderStats(); renderList(); renderChart(); }
 
-  // ---------- export / import ----------
-    // ---------- sync to Google Sheet + daily file ----------
-  const SKEY='sneezelog.sync.v1';
+  // ---------- drawer ----------
+  $('drawerBtn').onclick=()=>{ const d=$('drawer'), open=!d.classList.contains('open'); d.classList.toggle('open',open); $('dbody').hidden=!open; $('drawerBtn').setAttribute('aria-expanded',open); };
+
+  // ---------- sync to Google Sheet + daily file ----------
   const sync={url:'',pending:[],last:0,err:'',autoBackup:true,lastBackupDay:''};
   try{ Object.assign(sync,JSON.parse(localStorage.getItem(SKEY)||'{}')); }catch(e){}
   const saveSync=()=>{ try{ localStorage.setItem(SKEY,JSON.stringify(sync)); }catch(e){} };
@@ -352,16 +424,20 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
     if(again) flush();
   }
   function renderSync(){
-    const el=$('syncStatus'); if(!el) return; const n=sync.pending.length;
-    let msg;
-    if(!sync.url) msg='Not connected. Paste the Sheet web app URL above.';
-    else if(busy) msg='Sending '+n+'…';
-    else if(sync.err) msg='Last try failed ('+sync.err+'). '+n+' waiting, will retry.';
-    else if(n) msg=(navigator.onLine===false?'Offline. ':'')+n+' waiting to send.';
-    else msg=sync.last?'All synced. Last sent '+hm(sync.last)+(dayStart(sync.last)<dayStart(Date.now())?' on '+iso(sync.last).slice(0,10):'')+'.':'Connected. Nothing to send yet.';
-    el.textContent=msg; el.dataset.state=sync.err?'err':(n?'wait':'ok');
-    $('syncUrl').value=sync.url; $('autoBackup').checked=!!sync.autoBackup;
-    $('lastFile').textContent=sync.lastBackupDay?'Last daily file: '+sync.lastBackupDay+'.':'No daily file yet.';
+    const n=sync.pending.length, offline=navigator.onLine===false;
+    let state, short, long;
+    if(!sync.url){ state='off'; short='Local only'; long='Not connected. Paste the Sheet web app URL above.'; }
+    else if(busy){ state='wait'; short='Sending…'; long='Sending '+n+'…'; }
+    else if(sync.err){ state='err'; short='Sync failed'; long='Last try failed ('+sync.err+'). '+n+' waiting, will retry.'; }
+    else if(n){ state='wait'; short=offline?'Offline · '+n+' waiting':n+' waiting'; long=(offline?'Offline. ':'')+n+' waiting to send.'; }
+    else { state='ok'; const when=sync.last?hm(sync.last)+(dayStart(sync.last)<dayStart(Date.now())?' on '+iso(sync.last).slice(0,10):''):'';
+      short='Synced'; long=sync.last?'All synced. Last sent '+when+'.':'Connected. Nothing to send yet.'; }
+    $('hdrSync').dataset.state=state; $('hdrSyncTx').textContent=short;
+    $('drawerSum').dataset.state=state; $('drawerSumTx').textContent=state==='ok'&&sync.last?'Synced · '+hm(sync.last):short;
+    $('syncStatus').dataset.state=state; $('syncStatusTx').textContent=long;
+    if(document.activeElement!==$('syncUrl')) $('syncUrl').value=sync.url;
+    $('autoBackup').checked=!!sync.autoBackup;
+    $('autoNote').textContent='Your first tap each day also saves a full CSV to Downloads'+(sync.lastBackupDay?'. Last one: '+sync.lastBackupDay+'.':'');
   }
   $('syncSave').onclick=()=>{
     const u=$('syncUrl').value.trim();
@@ -380,12 +456,13 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
     try{ downloadCsv(true); sync.lastBackupDay=today; saveSync(); renderSync(); }catch(e){}
   }
 
+  // ---------- export / import ----------
   const sorted=()=>data.slice().sort((a,b)=>a.t-b.t);
   const csv=()=>'timestamp_local,unix_ms,event,location\n'+sorted().map(e=>iso(e.t)+','+e.t+','+(e.k==='s'?'sneeze':'antihistamine')+','+(e.l||'')).join('\n');
   function copy(text,label){
     const show=()=>{ $('io').hidden=false; $('ioText').value=text; $('ioText').select(); $('ioAction').hidden=true; };
     if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(text).then(()=>toast(label+' copied ('+data.length+' entries)'),()=>{show();toast('Select all and copy the text below');});
+      navigator.clipboard.writeText(text).then(()=>toast(label+' copied to clipboard ('+data.length+' entries)'),()=>{show();toast('Select all and copy the text below');});
     } else { show(); toast('Select all and copy the text below'); }
   }
   $('csvBtn').onclick=()=>copy(csv(),'CSV');
@@ -396,7 +473,7 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000);
   }
   $('dlBtn').onclick=()=>{ try{ downloadCsv(false); toast('Saved to Downloads. If nothing happened, use Copy CSV.'); }catch(e){ copy(csv(),'CSV'); } };
-  $('importBtn').onclick=()=>{ $('io').hidden=false; $('ioText').value=''; $('ioText').placeholder='Paste a JSON backup here'; $('ioAction').hidden=false; $('ioText').focus(); };
+  $('importBtn').onclick=()=>{ $('io').hidden=false; $('ioText').value=''; $('ioText').placeholder='Paste the backup text here'; $('ioAction').hidden=false; $('ioText').focus(); };
   $('ioClose').onclick=()=>{ $('io').hidden=true; };
   $('ioAction').onclick=()=>{
     try{
@@ -405,13 +482,12 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
       const seen=new Set(data.map(e=>e.t+e.k)); let n=0;
       for(const e of arr){ if(e&&typeof e.t==='number'&&(e.k==='s'||e.k==='p')&&!seen.has(e.t+e.k)){ const ne={t:e.t,k:e.k}; if(typeof e.l==='string'&&e.l) ne.l=e.l; data.push(ne); qAdd(ne); seen.add(e.t+e.k); n++; } }
       save(); render(); $('io').hidden=true; toast('Restored '+n+' new entries');
-    }catch(e){ toast('That text is not a valid backup. Paste the full JSON from “Backup”.'); }
+    }catch(e){ toast('That text is not a valid backup. Paste the full text from “Copy backup”.'); }
   };
 
-  if(installed) $('fsBtn').hidden=true;
-  if('serviceWorker' in navigator && location.protocol==='https:'){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
-  let inFrame=true; try{ inFrame=window.self!==window.top; }catch(e){}
-  if(inFrame){ $('dlBtn').hidden=true; $('fsBtn').hidden=true; $('syncBox').hidden=true; $('frameNote').hidden=false; }
+  // ---------- boot ----------
+  if('serviceWorker' in navigator && location.protocol==='https:' && !inFrame){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+  if(inFrame){ $('dlBtn').hidden=true; $('autoRow').hidden=true; $('syncBox').hidden=true; $('frameNote').hidden=false; }
 
   // One-time setup link: …/#sync=<Apps Script /exec URL>. The hash never reaches the server.
   try{
@@ -428,11 +504,11 @@ textarea{width:100%;min-height:110px;border-radius:12px;border:1px solid var(--l
   }catch(e){}
   render(); renderSync(); flush();
   window.addEventListener('online',flush);
+  window.addEventListener('offline',renderSync);
   setInterval(()=>{ if(sync.pending.length) flush(); },60000);
   setInterval(renderStats,30000);
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ render(); flush(); } });
 })();
 </script>
-
 </body>
 </html>
