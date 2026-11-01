@@ -1,5 +1,5 @@
 // Offline cache for Achoo Ledger. Bump VERSION when files change.
-const VERSION = 'achoo-v5';
+const VERSION = 'achoo-v6';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable.png'];
 
 self.addEventListener('install', e => {

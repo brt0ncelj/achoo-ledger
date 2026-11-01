@@ -64,9 +64,9 @@ header{display:flex;align-items:center;gap:10px}
 #sneezeBtn.bump .big{transform:scale(1.12)}
 #sneezeBtn .lbl{font-size:18px;font-weight:600}
 #sneezeBtn .hint{font-size:13px;opacity:.8}
-.burst{position:absolute;top:14px;right:16px;font-family:var(--f-num);font-size:13px;font-weight:700;background:rgba(255,255,255,.18);border-radius:999px;padding:3px 10px;opacity:0;transition:opacity .2s}
+.burst{position:absolute;top:14px;right:14px;font-family:var(--f-num);font-size:16px;font-weight:700;background:rgba(255,255,255,.18);border-radius:999px;padding:6px 14px;opacity:0;transition:opacity .2s}
 .burst.on{opacity:1}
-.burst b{font-family:var(--f-ui);margin-left:6px}
+.burst b{font-family:var(--f-ui);font-size:17px;margin-left:8px}
 .burst.hype{background:rgba(255,255,255,.95);color:#18221e}
 .burst.hype b{color:#c4476a}
 .burst.max{animation:wob .5s ease 2}
@@ -342,7 +342,7 @@ section h2 button{text-transform:none;letter-spacing:0;font-size:13px;color:var(
       div.querySelector('.t').textContent=hm(first.t);
       div.querySelector('.what span:last-child').textContent=r.k==='p'?'Antihistamine':(n>1?n+' sneezes':'1 sneeze');
       const l0=r.items[0].l;
-      if(l0 && l0!==loc){ const c=document.createElement('span'); c.className='chip'; c.textContent=l0; div.querySelector('.what').appendChild(c); }
+      if(l0){ const c=document.createElement('span'); c.className='chip'; c.textContent=l0; div.querySelector('.what').appendChild(c); }
       if(editing){
         const d=document.createElement('button'); d.className='del'; d.textContent='Delete';
         d.onclick=()=>{
